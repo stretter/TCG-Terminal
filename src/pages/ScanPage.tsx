@@ -11,7 +11,7 @@ export function ScanPage() {
   const [selected, setSelected] = useState<number>(1)
   const [occupied, setOccupied] = useState<number[]>([1, 2, 3])
   const [name, setName] = useState('')
-  const [setName, setSetName] = useState('')
+  const [printing, setPrinting] = useState('')
   const [batch, setBatch] = useState(0)
   const [notice, setNotice] = useState('This is a simulated intake screen. No camera, image recognition, or inventory service is connected.')
 
@@ -33,7 +33,7 @@ export function ScanPage() {
     setCards(next)
     setSelected(next[0].position)
     setName('')
-    setSetName('')
+    setPrinting('')
     setNotice(`Simulation: created ${next.length} individual intake records. Identify each card before condition review.`)
   }
 
@@ -41,22 +41,22 @@ export function ScanPage() {
     setSelected(position)
     const existing = cards.find((item) => item.position === position)
     setName(existing?.name ?? '')
-    setSetName(existing?.set ?? '')
+    setPrinting(existing?.set ?? '')
   }
 
   function confirmCard() {
-    if (!card || !name.trim() || !setName.trim()) {
+    if (!card || !name.trim() || !printing.trim()) {
       setNotice('Choose a captured position and enter both card name and set/printing before confirming.')
       return
     }
-    const updated = cards.map((item) => item.position === selected ? { ...item, name: name.trim(), set: setName.trim(), confirmed: true } : item)
+    const updated = cards.map((item) => item.position === selected ? { ...item, name: name.trim(), set: printing.trim(), confirmed: true } : item)
     setCards(updated)
     const next = updated.find((item) => !item.confirmed)
     setNotice(`${card.id} confirmed for this simulation. Condition review is not connected yet.`)
     if (next) {
       setSelected(next.position)
       setName(next.name)
-      setSetName(next.set)
+      setPrinting(next.set)
     }
   }
 
@@ -96,7 +96,7 @@ export function ScanPage() {
             </div>
             <div className="scan-actions">
               <button type="button" className="scan-primary" onClick={simulateCapture}>Simulate capture</button>
-              <button type="button" className="scan-secondary" onClick={() => {setCards([]);setSelected(1);setName('');setSetName('');setNotice('Grid reset. Choose occupied positions for your next simulated capture.')}}>Reset grid</button>
+              <button type="button" className="scan-secondary" onClick={() => {setCards([]);setSelected(1);setName('');setPrinting('');setNotice('Grid reset. Choose occupied positions for your next simulated capture.')}}>Reset grid</button>
             </div>
           </section>
           <section className="scan-panel" aria-label="Identification queue">
@@ -111,7 +111,7 @@ export function ScanPage() {
               <label htmlFor="card-name">Card name</label>
               <input id="card-name" value={name} onChange={(event) => setName(event.target.value)} disabled={!card} placeholder="Enter card name" />
               <label htmlFor="card-set">Set / printing</label>
-              <input id="card-set" value={setName} onChange={(event) => setSetName(event.target.value)} disabled={!card} placeholder="Enter set and printing" />
+              <input id="card-set" value={printing} onChange={(event) => setPrinting(event.target.value)} disabled={!card} placeholder="Enter set and printing" />
               <button type="button" className="scan-primary" disabled={!card} onClick={confirmCard}>{card?.confirmed ? 'Update confirmed identity' : 'Confirm identity'}</button>
               <p className="scan-footnote">Names are entered manually in this prototype; they are not verified against a card database.</p>
             </div>
