@@ -103,7 +103,7 @@ export function ScanPage() {
             <h2>Identification queue</h2>
             <p className="scan-muted">{cards.length ? `${confirmed} of ${cards.length} confirmed · ${pending.length} pending` : 'Capture a simulated batch to create intake records.'}</p>
             {cards.length ? <div className="scan-queue">{cards.map((item) => <button type="button" key={item.id} onClick={() => selectPosition(item.position)} className={`scan-queue-item ${selected === item.position ? 'selected' : ''}`}>
-              <span><strong>Position {String(item.position).padStart(2, '0')}</strong><small>{item.id}</small></span><span>{item.confirmed ? '✓ Confirmed' : 'Needs ID'}</span>
+              <span><strong>Position {String(item.position).padStart(2, '0')}</strong><small>{item.id}</small>{item.confirmed && <small className="scan-card-identity">{item.name} · {item.set}</small>}</span><span>{item.confirmed ? '✓ Confirmed' : 'Needs ID'}</span>
             </button>)}</div> : <p className="scan-empty">No cards captured yet.</p>}
             <div className="scan-identify">
               <h3>Individual identification</h3>
