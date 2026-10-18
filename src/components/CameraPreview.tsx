@@ -5,6 +5,26 @@ export function CameraPreview() {
   const streamRef = useRef<MediaStream | null>(null)
   const [status, setStatus] = useState('Camera is off.')
   const [active, setActive] = useState(false)
+  const [photo, setPhoto] = useState<string | null>(null)
+
+  function capturePhoto() {
+    const video = videoRef.current
+    if (!active || !video || !video.videoWidth || !video.videoHeight) {
+      setStatus('The camera is not ready to capture a frame yet.')
+      return
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const context = canvas.getContext('2d')
+    if (!context) {
+      setStatus('Could not create a photo preview in this browser.')
+      return
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    setPhoto(canvas.toDataURL('image/png'))
+    setStatus('Photo captured for local preview only. It has not been saved or uploaded.')
+  }
 
   function stopCamera() {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -53,7 +73,10 @@ export function CameraPreview() {
       <div className="scan-actions">
         <button type="button" className="scan-secondary" onClick={startCamera} disabled={active}>Start camera</button>
         <button type="button" className="scan-secondary" onClick={stopCamera} disabled={!active}>Stop camera</button>
+        <button type="button" className="scan-primary" onClick={capturePhoto} disabled={!active}>Capture photo</button>
+        {photo && <button type="button" className="scan-secondary" onClick={() => { setPhoto(null); setStatus('Photo discarded. Camera preview remains available.') }}>Discard photo</button>}
       </div>
+      {photo && <div><p className="scan-mode">Captured frame — local preview only</p><img src={photo} alt="Captured webcam frame" style={{ width: '100%', maxHeight: 260, objectFit: 'contain', borderRadius: 12 }} /></div>}
       <p className="scan-mode" role="status">{status}</p>
     </div>
   )
