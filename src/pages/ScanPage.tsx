@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { CameraPreview } from '../components/CameraPreview'
 
 type Source = 'overhead' | 'phone' | 'manual'
 type IntakeCard = { id: string; position: number; name: string; set: string; confirmed: boolean }
@@ -83,6 +84,7 @@ export function ScanPage() {
               <button type="button" className={source === 'manual' ? 'active' : ''} onClick={() => setSource('manual')}>Manual entry</button>
             </div>
             <p className="scan-mode">{source === 'overhead' ? 'Overhead USB camera: not connected (simulation)' : source === 'phone' ? 'Phone backup: simulated; secure upload link not implemented' : 'Manual fallback: enter a card identity after simulating capture'}</p>
+            {source === 'overhead' && <CameraPreview />}
             <div className="scan-grid" aria-label="Six-position scanning grid">
               {positions.map((position) => {
                 const entry = cards.find((item) => item.position === position)
