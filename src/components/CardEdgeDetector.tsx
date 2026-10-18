@@ -5,66 +5,84 @@ type Point = { x: number; y: number }
 const fallback: Point[] = [{x:.12,y:.08},{x:.88,y:.08},{x:.88,y:.92},{x:.12,y:.92}]
 const clamp = (x:number) => Math.max(0,Math.min(1,x))
 
-// Finds rectangular boundary candidates from image gradients. This is an experimental
-// axis-aligned detector, not full perspective/contour recognition.
+// Experimental rotation-aware contour detector. Sobel edges are linked into
+// connected components; large card-shaped contours are scored and four corner
+// extrema are extracted. This is not trained card recognition.
 function proposeCorners(image: HTMLImageElement): Point[] | null {
-  const w=256,h=256
+  const size=280,w=size,h=size
   const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h
   const ctx=canvas.getContext('2d',{willReadFrequently:true});if(!ctx)return null
   ctx.drawImage(image,0,0,w,h)
-  const raw=ctx.getImageData(0,0,w,h).data
+  const rgba=ctx.getImageData(0,0,w,h).data
   const gray=new Float32Array(w*h)
-  for(let i=0;i<gray.length;i++)gray[i]=.299*raw[i*4]+.587*raw[i*4+1]+.114*raw[i*4+2]
-  const vertical=new Float32Array(w*h), horizontal=new Float32Array(w*h)
+  for(let i=0;i<gray.length;i++)gray[i]=.299*rgba[4*i]+.587*rgba[4*i+1]+.114*rgba[4*i+2]
+  const strength=new Float32Array(w*h)
+  let total=0,valid=0
   for(let y=2;y<h-2;y++)for(let x=2;x<w-2;x++){
-    const n=y*w+x
-    vertical[n]=Math.abs(gray[n+1]-gray[n-1])
-    horizontal[n]=Math.abs(gray[n+w]-gray[n-w])
+    const i=y*w+x
+    const gx=-gray[i-w-1]+gray[i-w+1]-2*gray[i-1]+2*gray[i+1]-gray[i+w-1]+gray[i+w+1]
+    const gy=-gray[i-w-1]-2*gray[i-w]-gray[i-w+1]+gray[i+w-1]+2*gray[i+w]+gray[i+w+1]
+    const value=Math.hypot(gx,gy)
+    strength[i]=value;total+=value;valid++
   }
-  const integral=(data:Float32Array)=>{
-    const out=new Float64Array((w+1)*(h+1))
-    for(let y=1;y<=h;y++)for(let x=1;x<=w;x++){
-      const at=y*(w+1)+x
-      out[at]=data[(y-1)*w+x-1]+out[at-1]+out[at-(w+1)]-out[at-(w+2)]
+  const threshold=Math.max(95,Math.min(220,(total/Math.max(1,valid))*2.25))
+  const edges=new Uint8Array(w*h)
+  // Small dilation links weak breaks around rounded card corners.
+  for(let y=3;y<h-3;y++)for(let x=3;x<w-3;x++)
+    if(strength[y*w+x]>threshold)
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)
+        edges[(y+dy)*w+x+dx]=1
+  const seen=new Uint8Array(w*h)
+  const offsets=[-w-1,-w,-w+1,-1,1,w-1,w,w+1]
+  let best:Point[]|null=null,bestScore=-Infinity
+  for(let y=5;y<h-5;y+=2)for(let x=5;x<w-5;x+=2){
+    const index=y*w+x
+    if(!edges[index]||seen[index])continue
+    const queue=[index];seen[index]=1
+    let head=0,minX=w,minY=h,maxX=0,maxY=0
+    const boundary:number[]=[]
+    while(head<queue.length){
+      const i=queue[head++],px=i%w,py=Math.floor(i/w)
+      minX=Math.min(minX,px);maxX=Math.max(maxX,px)
+      minY=Math.min(minY,py);maxY=Math.max(maxY,py)
+      boundary.push(i)
+      if(px<3||px>=w-3||py<3||py>=h-3)continue
+      for(const off of offsets){const at=i+off;if(edges[at]&&!seen[at]){seen[at]=1;queue.push(at)}}
     }
-    return out
-  }
-  const vx=integral(vertical),hy=integral(horizontal)
-  const sum=(ii:Float64Array,x1:number,y1:number,x2:number,y2:number)=>{
-    const stride=w+1
-    return ii[y2*stride+x2]-ii[y1*stride+x2]-ii[y2*stride+x1]+ii[y1*stride+x1]
-  }
-  const aspect=image.naturalWidth/image.naturalHeight
-  const cardRatio=63/88 // portrait MTG card
-  let bestScore=0
-  const candidates: Array<{x:number;y:number;cw:number;ch:number;score:number}> = []
-  for(let ch=76;ch<=222;ch+=8) {
-    const cw=Math.round(ch*cardRatio/aspect)
-    if(cw<30||cw>220)continue
-    for(let y=8;y+ch<h-8;y+=5)for(let x=8;x+cw<w-8;x+=5){
-      const band=3
-      const edges=(
-        sum(vx,x,y,x+band,y+ch)+sum(vx,x+cw-band,y,x+cw,y+ch)
-        +sum(hy,x,y,x+cw,y+band)+sum(hy,x,y+ch-band,x+cw,y+ch)
-      )/(2*band*(cw+ch))
-      // Weak, unconvincing borders should be left for manual correction.
-      const areaFraction=cw*ch/(w*h)
-      const score=edges*(1-.15*Math.abs(areaFraction-.33))
-      if(score>bestScore)bestScore=score
-      if(score>12)candidates.push({x,y,cw,ch,score})
+    const width=maxX-minX,height=maxY-minY
+    if(boundary.length<120||width<35||height<45||width*height<3500)continue
+    // Reject components extending into the edge of the photograph.
+    if(minX<3||minY<3||maxX>=w-3||maxY>=h-3)continue
+    // Extract outer quadrilateral by the farthest points in four diagonal directions.
+    let tl=boundary[0],tr=tl,br=tl,bl=tl
+    let minSum=Infinity,maxSum=-Infinity,minDiff=Infinity,maxDiff=-Infinity
+    for(const p of boundary){
+      const px=p%w,py=Math.floor(p/w),sum=px+py,diff=py-px
+      if(sum<minSum){minSum=sum;tl=p}
+      if(sum>maxSum){maxSum=sum;br=p}
+      if(diff<minDiff){minDiff=diff;tr=p}
+      if(diff>maxDiff){maxDiff=diff;bl=p}
     }
+    const points=[tl,tr,br,bl].map(p=>({x:(p%w)/w,y:Math.floor(p/w)/h}))
+    const length=(a:Point,b:Point)=>Math.hypot((a.x-b.x)*image.naturalWidth,(a.y-b.y)*image.naturalHeight)
+    const top=length(points[0],points[1]),bottom=length(points[3],points[2])
+    const left=length(points[0],points[3]),right=length(points[1],points[2])
+    const ww=(top+bottom)/2,hh=(left+right)/2
+    if(ww<1||hh<1)continue
+    const ratio=ww/hh
+    if(ratio<.48||ratio>.98)continue
+    const cross=(a:Point,b:Point,d:Point)=>(b.x-a.x)*(d.y-a.y)-(b.y-a.y)*(d.x-a.x)
+    if(cross(points[0],points[1],points[2])<=0||cross(points[1],points[2],points[3])<=0)continue
+    const polygonArea=Math.abs(points.reduce((sum,p,i)=>{
+      const q=points[(i+1)%4];return sum+p.x*q.y-q.x*p.y
+    },0))/2
+    if(polygonArea<.08||polygonArea>.85)continue
+    const ratioFit=Math.exp(-Math.pow(Math.log(ratio/(63/88))/.3,2))
+    // Favor the physical outer contour over the usually smaller artwork frame.
+    const score=polygonArea*(.4+.6*ratioFit)+Math.min(boundary.length/10000,.08)
+    if(score>bestScore){bestScore=score;best=points}
   }
-  if(bestScore<17)return null
-  // The inner art frame often has the strongest contrast. When a larger,
-  // well-aligned card-shaped outline has nearly comparable support, prefer it.
-  const strong=candidates.filter(candidate=>candidate.score>=bestScore*.82)
-  const b=strong.sort((a,b)=>{
-    const aArea=a.cw*a.ch,bArea=b.cw*b.ch
-    return bArea-aArea || b.score-a.score
-  })[0]
-  if(!b)return null
-  return [{x:b.x/w,y:b.y/h},{x:(b.x+b.cw)/w,y:b.y/h},
-    {x:(b.x+b.cw)/w,y:(b.y+b.ch)/h},{x:b.x/w,y:(b.y+b.ch)/h}]
+  return best
 }
 
 function straighten(image:HTMLImageElement, points:Point[]):string {
