@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { PointerEvent } from 'react'
 
 type Props = { occupiedPositions: number[]; selectedPosition: number }
 const FRAME_WIDTH = 900
@@ -131,12 +132,12 @@ export function CameraPreview({ occupiedPositions, selectedPosition }: Props) {
     setOffset({ x: 0, y: 0 })
   }
 
-  function onDragStart(event: React.PointerEvent<HTMLDivElement>) {
+  function onDragStart(event: PointerEvent<HTMLDivElement>) {
     event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = { x: event.clientX, y: event.clientY, startX: offset.x, startY: offset.y }
   }
 
-  function onDragMove(event: React.PointerEvent<HTMLDivElement>) {
+  function onDragMove(event: PointerEvent<HTMLDivElement>) {
     const start = dragRef.current
     if (!start) return
     const bounds = event.currentTarget.getBoundingClientRect()
