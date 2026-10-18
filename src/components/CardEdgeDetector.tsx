@@ -85,13 +85,12 @@ function straighten(image:HTMLImageElement, points:Point[]):string {
 
 export function CardEdgeDetector({photo}:{photo:string|null}) {
   const [corners,setCorners]=useState<Point[]>(fallback)
-  const [cardImage,setCardImage]=useState('')
-  const [slots,setSlots]=useState<Record<number,string>>({})
+  const [slots,setSlots]=useState<Record<number,{image:string;approved:boolean}>>({})
   const [message,setMessage]=useState('Load a photo to propose card edges.')
   const imageRef=useRef<HTMLImageElement|null>(null)
   const dragRef=useRef<number|null>(null)
   useEffect(()=>{
-    if(!photo){imageRef.current=null;setCardImage('');return}
+    if(!photo){imageRef.current=null;return}
     let cancelled=false
     const img=new Image()
     img.onload=()=>{
@@ -99,8 +98,7 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
       imageRef.current=img
       const proposed=proposeCorners(img)
       setCorners(proposed ?? fallback)
-      setCardImage('')
-      setMessage(proposed ? 'Possible card edges detected. Check the four corners before previewing.' : 'No reliable card detected. Drag the four corners onto the card manually.')
+      setMessage(proposed ? 'Candidate crop placed in the next open position. Check its borders and approve or reject it.' : 'No reliable card detected. Adjust the four corners before approving.')
     }
     img.onerror=()=>setMessage('Could not read the image.')
     img.src=photo
@@ -115,18 +113,23 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
     const y=clamp((event.clientY-rect.top)/rect.height)
     setCorners(existing=>existing.map((p,i)=>i===index?{x,y}:p))
   }
-  function previewCrop() {
-    if(!imageRef.current)return
-    const result=straighten(imageRef.current,corners)
-    if(result){setCardImage(result);setMessage('Inspect the card preview, then choose Crop ready.')}
+  const nextPosition=[1,2,3,4,5,6].find(position => slots[position]?.approved !== true)
+  const [draftImage,setDraftImage]=useState('')
+  useEffect(()=>{
+    if (!imageRef.current || !photo) { setDraftImage(''); return }
+    // Keep the currently active position in sync when corners move.
+    setDraftImage(straighten(imageRef.current,corners))
+  },[corners,photo])
+
+  function approve(position:number) {
+    if(!draftImage || position!==nextPosition)return
+    setSlots(previous=>({...previous,[position]:{image:draftImage,approved:true}}))
+    setMessage(`Position ${String(position).padStart(2,'0')} approved. Capture or upload another card.`)
   }
-  function acceptCrop() {
-    if(!cardImage){setMessage('Preview your crop first.');return}
-    const next=[1,2,3,4,5,6].find(position=>!slots[position])
-    if(!next){setMessage('All six preview positions are full.');return}
-    setSlots(previous=>({...previous,[next]:cardImage}))
-    setMessage(`Card crop added to position ${String(next).padStart(2,'0')}. These images are local previews only.`)
-    setCardImage('')
+  function reject(position:number) {
+    if(position!==nextPosition)return
+    setDraftImage('')
+    setMessage('Candidate rejected. Adjust corners or load another image to try again.')
   }
   return <section aria-label="Single-card edge detection workspace" style={{display:'grid',gap:10,marginTop:16}}>
     <h3>Single-card detection and crop</h3>
@@ -143,19 +146,24 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
       </svg>
     </div>}
     <div className="scan-actions">
-      <button type="button" className="scan-secondary" onClick={()=>{if(imageRef.current){const proposed=proposeCorners(imageRef.current);setCorners(proposed ?? fallback);setCardImage('');setMessage(proposed ? 'Possible card boundary found; please verify.' : 'No reliable boundary found; position corners manually.')}}} disabled={!photo}>Detect edges again</button>
-      <button type="button" className="scan-primary" onClick={previewCrop} disabled={!photo}>Preview crop</button>
-      <button type="button" className="scan-primary" onClick={acceptCrop} disabled={!cardImage}>Crop ready</button>
+      <button type="button" className="scan-secondary" onClick={()=>{if(imageRef.current){const proposed=proposeCorners(imageRef.current);setCorners(proposed ?? fallback);setMessage(proposed ? 'Possible card boundary found; please verify.' : 'No reliable boundary found; position corners manually.')}}} disabled={!photo}>Detect edges again</button>
     </div>
-    {cardImage&&<img src={cardImage} alt="Straightened card crop ready for approval" style={{width:160,maxWidth:'100%',borderRadius:8}}/>}
-    <p className="scan-mode">Accepted card previews (filled in order, independent of identification records):</p>
+    <p className="scan-mode">Card crop positions: proposed crops appear automatically. Approve or reject directly in their position.</p>
     <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8}}>
-      {[1,2,3,4,5,6].map(n=><div key={n} style={{border:'1px solid #475569',padding:5,minHeight:85,borderRadius:8}}>
-        <small>Position {String(n).padStart(2,'0')}</small>
-        {slots[n]&&<img src={slots[n]} alt={`Accepted card at position ${n}`} style={{width:'100%',display:'block'}}/>}
-      </div>)}
+      {[1,2,3,4,5,6].map(n=>{
+        const approved=slots[n]?.approved===true
+        const image=approved?slots[n].image:n===nextPosition?draftImage:''
+        return <div key={n} style={{border:approved?'2px solid #22c55e':n===nextPosition?'2px solid #60a5fa':'1px solid #475569',padding:5,minHeight:85,borderRadius:8}}>
+          <small>Position {String(n).padStart(2,'0')} {approved?'· approved':n===nextPosition?'· awaiting review':''}</small>
+          {image&&<img src={image} alt={`Card crop at position ${n}`} style={{width:'100%',display:'block',marginTop:5}}/>}
+          {n===nextPosition&&image&&<div className="scan-actions">
+            <button type="button" onClick={()=>approve(n)}>Approve</button>
+            <button type="button" onClick={()=>reject(n)}>Reject</button>
+          </div>}
+        </div>
+      })}
     </div>
-    <button type="button" className="scan-secondary" onClick={()=>{setSlots({});setMessage('Card crop previews cleared.')}}>Clear crop previews</button>
+    <button type="button" className="scan-secondary" onClick={()=>{setSlots({});setMessage('Card positions cleared.')}}>Clear crop previews</button>
     <p className="scan-mode" role="status">{message}</p>
   </section>
 }
