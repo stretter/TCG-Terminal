@@ -124,12 +124,12 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
   function approve(position:number) {
     if(!draftImage || position!==nextPosition)return
     setSlots(previous=>({...previous,[position]:{image:draftImage,approved:true}}))
-    setMessage(`Position ${String(position).padStart(2,'0')} approved. Capture or upload another card.`)
+    setMessage(`Position ${String(position).padStart(2,'0')} accepted. Capture or upload another card.`)
   }
   function reject(position:number) {
     if(position!==nextPosition)return
     setDraftImage('')
-    setMessage('Candidate rejected. Adjust corners or load another image to try again.')
+    setMessage('Retake selected. Adjust the corners or capture/upload another photo.')
   }
   return <section aria-label="Single-card edge detection workspace" style={{display:'grid',gap:10,marginTop:16}}>
     <h3>Single-card detection and crop</h3>
@@ -148,17 +148,17 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
     <div className="scan-actions">
       <button type="button" className="scan-secondary" onClick={()=>{if(imageRef.current){const proposed=proposeCorners(imageRef.current);setCorners(proposed ?? fallback);setMessage(proposed ? 'Possible card boundary found; please verify.' : 'No reliable boundary found; position corners manually.')}}} disabled={!photo}>Detect edges again</button>
     </div>
-    <p className="scan-mode">Card crop positions: proposed crops appear automatically. Approve or reject directly in their position.</p>
+    <p className="scan-mode">Card crop positions: proposed crops appear automatically. Accept the crop or retake it directly in its position.</p>
     <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:8}}>
       {[1,2,3,4,5,6].map(n=>{
         const approved=slots[n]?.approved===true
         const image=approved?slots[n].image:n===nextPosition?draftImage:''
         return <div key={n} style={{border:approved?'2px solid #22c55e':n===nextPosition?'2px solid #60a5fa':'1px solid #475569',padding:5,minHeight:85,borderRadius:8}}>
-          <small>Position {String(n).padStart(2,'0')} {approved?'· approved':n===nextPosition?'· awaiting review':''}</small>
+          <small>Position {String(n).padStart(2,'0')} {approved?'· accepted':n===nextPosition?'· awaiting review':''}</small>
           {image&&<img src={image} alt={`Card crop at position ${n}`} style={{width:'100%',display:'block',marginTop:5}}/>}
           {n===nextPosition&&image&&<div className="scan-actions">
-            <button type="button" onClick={()=>approve(n)}>Approve</button>
-            <button type="button" onClick={()=>reject(n)}>Reject</button>
+            <button type="button" onClick={()=>approve(n)}>Accept</button>
+            <button type="button" onClick={()=>reject(n)}>Retake</button>
           </div>}
         </div>
       })}
