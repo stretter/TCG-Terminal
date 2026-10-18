@@ -37,7 +37,7 @@ function proposeCorners(image: HTMLImageElement): Point[] | null {
   const aspect=image.naturalWidth/image.naturalHeight
   const cardRatio=63/88 // portrait MTG card
   let bestScore=0
-  let best:{x:number;y:number;cw:number;ch:number}|null=null
+  const candidates: Array<{x:number;y:number;cw:number;ch:number;score:number}> = []
   for(let ch=76;ch<=222;ch+=8) {
     const cw=Math.round(ch*cardRatio/aspect)
     if(cw<30||cw>220)continue
@@ -50,11 +50,19 @@ function proposeCorners(image: HTMLImageElement): Point[] | null {
       // Weak, unconvincing borders should be left for manual correction.
       const areaFraction=cw*ch/(w*h)
       const score=edges*(1-.15*Math.abs(areaFraction-.33))
-      if(score>bestScore){bestScore=score;best={x,y,cw,ch}}
+      if(score>bestScore)bestScore=score
+      if(score>12)candidates.push({x,y,cw,ch,score})
     }
   }
-  if(!best||bestScore<17)return null
-  const b=best
+  if(bestScore<17)return null
+  // The inner art frame often has the strongest contrast. When a larger,
+  // well-aligned card-shaped outline has nearly comparable support, prefer it.
+  const strong=candidates.filter(candidate=>candidate.score>=bestScore*.82)
+  const b=strong.sort((a,b)=>{
+    const aArea=a.cw*a.ch,bArea=b.cw*b.ch
+    return bArea-aArea || b.score-a.score
+  })[0]
+  if(!b)return null
   return [{x:b.x/w,y:b.y/h},{x:(b.x+b.cw)/w,y:b.y/h},
     {x:(b.x+b.cw)/w,y:(b.y+b.ch)/h},{x:b.x/w,y:(b.y+b.ch)/h}]
 }
