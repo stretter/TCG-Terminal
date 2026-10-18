@@ -84,7 +84,7 @@ export function ScanPage() {
               <button type="button" className={source === 'manual' ? 'active' : ''} onClick={() => setSource('manual')}>Manual entry</button>
             </div>
             <p className="scan-mode">{source === 'overhead' ? 'Overhead camera: local capture test; automatic card detection not connected' : source === 'phone' ? 'Phone backup: simulated; secure upload link not implemented' : 'Manual fallback: enter a card identity after simulating capture'}</p>
-            {source === 'overhead' && <CameraPreview occupiedPositions={cards.length ? cards.map((item) => item.position) : occupied} selectedPosition={selected} />}
+            {source === 'overhead' && <CameraPreview />}
             <div className="scan-grid" aria-label="Six-position scanning grid">
               {positions.map((position) => {
                 const entry = cards.find((item) => item.position === position)
