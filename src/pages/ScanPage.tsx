@@ -73,7 +73,7 @@ export function ScanPage() {
           <div><p className="eyebrow">Workflow step 1 · Card intake</p><h1>Scan cards</h1><p className="scan-muted">Batch capture, individual identification, and a clear review queue.</p></div>
           <Link className="scan-home" to="/">← Foundation</Link>
         </header>
-        <div className="scan-banner" role="status"><strong>Prototype mode</strong> — camera capture and card recognition are simulated. No photographs are taken or uploaded.</div>
+        <div className="scan-banner" role="status"><strong>Prototype mode</strong> — camera preview and local photo capture are available; card recognition and intake assignment remain simulated. No photographs are uploaded.</div>
         <div className="scan-layout">
           <section className="scan-panel" aria-label="Capture station">
             <h2>Capture station</h2>
@@ -83,8 +83,8 @@ export function ScanPage() {
               <button type="button" className={source === 'phone' ? 'active' : ''} onClick={() => setSource('phone')}>Use phone instead</button>
               <button type="button" className={source === 'manual' ? 'active' : ''} onClick={() => setSource('manual')}>Manual entry</button>
             </div>
-            <p className="scan-mode">{source === 'overhead' ? 'Overhead USB camera: not connected (simulation)' : source === 'phone' ? 'Phone backup: simulated; secure upload link not implemented' : 'Manual fallback: enter a card identity after simulating capture'}</p>
-            {source === 'overhead' && <CameraPreview />}
+            <p className="scan-mode">{source === 'overhead' ? 'Overhead camera: local capture test; automatic card detection not connected' : source === 'phone' ? 'Phone backup: simulated; secure upload link not implemented' : 'Manual fallback: enter a card identity after simulating capture'}</p>
+            {source === 'overhead' && <CameraPreview occupiedPositions={cards.length ? cards.map((item) => item.position) : occupied} selectedPosition={selected} />}
             <div className="scan-grid" aria-label="Six-position scanning grid">
               {positions.map((position) => {
                 const entry = cards.find((item) => item.position === position)
