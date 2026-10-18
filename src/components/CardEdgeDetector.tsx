@@ -5,28 +5,58 @@ type Point = { x: number; y: number }
 const fallback: Point[] = [{x:.12,y:.08},{x:.88,y:.08},{x:.88,y:.92},{x:.12,y:.92}]
 const clamp = (x:number) => Math.max(0,Math.min(1,x))
 
-// Conservative single-object proposal based on contrast with the image's outer background.
-// Not a trained recognizer; manual four-corner correction is essential.
-function proposeCorners(image: HTMLImageElement): Point[] {
-  const canvas=document.createElement('canvas'); canvas.width=200; canvas.height=200
-  const ctx=canvas.getContext('2d',{willReadFrequently:true}); if(!ctx)return fallback
-  ctx.drawImage(image,0,0,200,200)
-  const data=ctx.getImageData(0,0,200,200).data
-  const rgb=(x:number,y:number)=>{const k=(y*200+x)*4;return [data[k],data[k+1],data[k+2]]}
-  const edge=[rgb(2,2),rgb(197,2),rgb(2,197),rgb(197,197)]
-  const bg=[0,1,2].map(i=>edge.reduce((s,p)=>s+p[i],0)/4)
-  let minX=200,minY=200,maxX=0,maxY=0,count=0
-  for(let y=5;y<195;y+=2)for(let x=5;x<195;x+=2){
-    const p=rgb(x,y)
-    const contrast=Math.hypot(p[0]-bg[0],p[1]-bg[1],p[2]-bg[2])
-    if(contrast>65){minX=Math.min(x,minX);maxX=Math.max(x,maxX);minY=Math.min(y,minY);maxY=Math.max(y,maxY);count++}
+// Finds rectangular boundary candidates from image gradients. This is an experimental
+// axis-aligned detector, not full perspective/contour recognition.
+function proposeCorners(image: HTMLImageElement): Point[] | null {
+  const w=256,h=256
+  const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});if(!ctx)return null
+  ctx.drawImage(image,0,0,w,h)
+  const raw=ctx.getImageData(0,0,w,h).data
+  const gray=new Float32Array(w*h)
+  for(let i=0;i<gray.length;i++)gray[i]=.299*raw[i*4]+.587*raw[i*4+1]+.114*raw[i*4+2]
+  const vertical=new Float32Array(w*h), horizontal=new Float32Array(w*h)
+  for(let y=2;y<h-2;y++)for(let x=2;x<w-2;x++){
+    const n=y*w+x
+    vertical[n]=Math.abs(gray[n+1]-gray[n-1])
+    horizontal[n]=Math.abs(gray[n+w]-gray[n-w])
   }
-  if(count<350 || maxX-minX<45 || maxY-minY<55) return fallback
-  const pad=3
-  return [{x:clamp((minX-pad)/200),y:clamp((minY-pad)/200)},
-    {x:clamp((maxX+pad)/200),y:clamp((minY-pad)/200)},
-    {x:clamp((maxX+pad)/200),y:clamp((maxY+pad)/200)},
-    {x:clamp((minX-pad)/200),y:clamp((maxY+pad)/200)}]
+  const integral=(data:Float32Array)=>{
+    const out=new Float64Array((w+1)*(h+1))
+    for(let y=1;y<=h;y++)for(let x=1;x<=w;x++){
+      const at=y*(w+1)+x
+      out[at]=data[(y-1)*w+x-1]+out[at-1]+out[at-(w+1)]-out[at-(w+2)]
+    }
+    return out
+  }
+  const vx=integral(vertical),hy=integral(horizontal)
+  const sum=(ii:Float64Array,x1:number,y1:number,x2:number,y2:number)=>{
+    const stride=w+1
+    return ii[y2*stride+x2]-ii[y1*stride+x2]-ii[y2*stride+x1]+ii[y1*stride+x1]
+  }
+  const aspect=image.naturalWidth/image.naturalHeight
+  const cardRatio=63/88 // portrait MTG card
+  let bestScore=0
+  let best:{x:number;y:number;cw:number;ch:number}|null=null
+  for(let ch=76;ch<=222;ch+=8) {
+    const cw=Math.round(ch*cardRatio/aspect)
+    if(cw<30||cw>220)continue
+    for(let y=8;y+ch<h-8;y+=5)for(let x=8;x+cw<w-8;x+=5){
+      const band=3
+      const edges=(
+        sum(vx,x,y,x+band,y+ch)+sum(vx,x+cw-band,y,x+cw,y+ch)
+        +sum(hy,x,y,x+cw,y+band)+sum(hy,x,y+ch-band,x+cw,y+ch)
+      )/(2*band*(cw+ch))
+      // Weak, unconvincing borders should be left for manual correction.
+      const areaFraction=cw*ch/(w*h)
+      const score=edges*(1-.15*Math.abs(areaFraction-.33))
+      if(score>bestScore){bestScore=score;best={x,y,cw,ch}}
+    }
+  }
+  if(!best||bestScore<17)return null
+  const b=best
+  return [{x:b.x/w,y:b.y/h},{x:(b.x+b.cw)/w,y:b.y/h},
+    {x:(b.x+b.cw)/w,y:(b.y+b.ch)/h},{x:b.x/w,y:(b.y+b.ch)/h}]
 }
 
 function straighten(image:HTMLImageElement, points:Point[]):string {
@@ -67,9 +97,10 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
     img.onload=()=>{
       if(cancelled)return
       imageRef.current=img
-      setCorners(proposeCorners(img))
+      const proposed=proposeCorners(img)
+      setCorners(proposed ?? fallback)
       setCardImage('')
-      setMessage('Suggested edges are approximate. Drag the four corner handles onto the card.')
+      setMessage(proposed ? 'Possible card edges detected. Check the four corners before previewing.' : 'No reliable card detected. Drag the four corners onto the card manually.')
     }
     img.onerror=()=>setMessage('Could not read the image.')
     img.src=photo
@@ -99,7 +130,7 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
   }
   return <section aria-label="Single-card edge detection workspace" style={{display:'grid',gap:10,marginTop:16}}>
     <h3>Single-card detection and crop</h3>
-    <p className="scan-mode">Automatic boundary suggestion (experimental). Adjust the four corners manually if needed.</p>
+    <p className="scan-mode">Experimental card-shaped edge search. If the outline is wrong, move all four corners manually. Avoid glare and busy backgrounds.</p>
     {photo&&<div style={{position:'relative',width:'100%'}}>
       <img src={photo} alt="Source photo for card detection" style={{width:'100%',display:'block',borderRadius:10}}/>
       <svg viewBox="0 0 100 100" preserveAspectRatio="none" onPointerMove={correctCorner}
@@ -112,7 +143,7 @@ export function CardEdgeDetector({photo}:{photo:string|null}) {
       </svg>
     </div>}
     <div className="scan-actions">
-      <button type="button" className="scan-secondary" onClick={()=>{if(imageRef.current){setCorners(proposeCorners(imageRef.current));setCardImage('')}}} disabled={!photo}>Detect edges again</button>
+      <button type="button" className="scan-secondary" onClick={()=>{if(imageRef.current){const proposed=proposeCorners(imageRef.current);setCorners(proposed ?? fallback);setCardImage('');setMessage(proposed ? 'Possible card boundary found; please verify.' : 'No reliable boundary found; position corners manually.')}}} disabled={!photo}>Detect edges again</button>
       <button type="button" className="scan-primary" onClick={previewCrop} disabled={!photo}>Preview crop</button>
       <button type="button" className="scan-primary" onClick={acceptCrop} disabled={!cardImage}>Crop ready</button>
     </div>
