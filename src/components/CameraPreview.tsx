@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
+import { CardEdgeDetector } from './CardEdgeDetector'
 
 type Props = { occupiedPositions: number[]; selectedPosition: number }
 const FRAME_WIDTH = 900
@@ -198,6 +199,7 @@ export function CameraPreview({ occupiedPositions, selectedPosition }: Props) {
         </div>
         <p className="scan-mode">The grid stays fixed while you move and resize the photo. Perspective correction, automatic detection and record assignment are not implemented.</p>
       </>}
+      <CardEdgeDetector photo={photo} />
       <p className="scan-mode" role="status">{status}</p>
     </div>
   )
