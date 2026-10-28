@@ -1,126 +1,126 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CameraPreview } from '../components/CameraPreview'
 
-type Source = 'overhead' | 'phone' | 'manual'
-type IntakeCard = { id: string; position: number; name: string; set: string; confirmed: boolean }
-const positions = [1, 2, 3, 4, 5, 6]
+type Status = 'bulk' | 'review'
+type Intake = { id: string; name: string; printing: string; value: number | null; status: Status; reason: string }
+const PRICE_LIMIT = 5
+const CONFIDENCE_LIMIT = 0.95
 
 export function ScanPage() {
-  const [source, setSource] = useState<Source>('overhead')
-  const [cards, setCards] = useState<IntakeCard[]>([])
-  const [selected, setSelected] = useState<number>(1)
-  const [occupied, setOccupied] = useState<number[]>([1, 2, 3])
+  const [items, setItems] = useState<Intake[]>([])
+  const [counter, setCounter] = useState(0)
   const [name, setName] = useState('')
   const [printing, setPrinting] = useState('')
-  const [batch, setBatch] = useState(0)
-  const [notice, setNotice] = useState('This is a simulated intake screen. No camera, image recognition, or inventory service is connected.')
+  const [value, setValue] = useState('')
+  const [confidence, setConfidence] = useState('98')
+  const [finishKnown, setFinishKnown] = useState(true)
+  const [playable, setPlayable] = useState(true)
+  const [cardPresent, setCardPresent] = useState(false)
+  const [notice, setNotice] = useState('Prototype: simulated identification only. Live card recognition, pricing, and automatic capture are not connected.')
 
-  const card = cards.find((item) => item.position === selected)
-  const confirmed = cards.filter((item) => item.confirmed).length
-  const pending = useMemo(() => cards.filter((item) => !item.confirmed).sort((a, b) => a.position - b.position), [cards])
+  function submitSimulatedScan() {
+    if (cardPresent) { setNotice('Remove the previous card before scanning another.'); return }
+    const estimated = value.trim() === '' ? null : Number(value)
+    const confidenceNumber = Number(confidence) / 100
+    const identified = Boolean(name.trim() && printing.trim())
+    const validValue = estimated !== null && Number.isFinite(estimated) && estimated >= 0
+    const automatic = identified && validValue && estimated < PRICE_LIMIT &&
+      confidenceNumber >= CONFIDENCE_LIMIT && finishKnown && playable
+    const reason = automatic ? 'Confident match; below bulk threshold' :
+      !identified ? 'Card or printing unidentified' :
+      !validValue ? 'Price unknown or invalid' :
+      estimated >= PRICE_LIMIT ? 'Potentially valuable card' :
+      confidenceNumber < CONFIDENCE_LIMIT ? 'Low recognition confidence' :
+      !finishKnown ? 'Finish / foil status uncertain' : 'Playability concern'
+    const next = counter + 1
+    setCounter(next)
+    setItems(previous => [{ id: `INT-${String(next).padStart(4, '0')}`, name: name.trim() || 'Unknown card',
+      printing: printing.trim() || 'Unknown printing', value: validValue ? estimated : null,
+      status: automatic ? 'bulk' : 'review', reason }, ...previous])
+    setCardPresent(true)
+    setNotice(automatic ? 'Automatically added to bulk intake. Remove this card to enable the next scan.' :
+      `Sent to review: ${reason}. Remove this card before scanning again.`)
+  }
 
-  function simulateCapture() {
-    if (occupied.length === 0) {
-      setNotice('Select at least one occupied grid position before simulating a capture.')
-      return
-    }
-    const nextBatch = batch + 1
-    const next = [...occupied].sort((a, b) => a - b).map((position) => ({
-      id: `INT-${String(nextBatch).padStart(3, '0')}-${String(position).padStart(2, '0')}`,
-      position, name: '', set: '', confirmed: false,
-    }))
-    setBatch(nextBatch)
-    setCards(next)
-    setSelected(next[0].position)
+  function removeCard() {
+    setCardPresent(false)
     setName('')
     setPrinting('')
-    setNotice(`Simulation: created ${next.length} individual intake records. Identify each card before condition review.`)
+    setValue('')
+    setConfidence('98')
+    setFinishKnown(true)
+    setPlayable(true)
+    setNotice('Card removed. Ready for the next scan.')
   }
 
-  function selectPosition(position: number) {
-    setSelected(position)
-    const existing = cards.find((item) => item.position === position)
-    setName(existing?.name ?? '')
-    setPrinting(existing?.set ?? '')
-  }
-
-  function confirmCard() {
-    if (!card || !name.trim() || !printing.trim()) {
-      setNotice('Choose a captured position and enter both card name and set/printing before confirming.')
-      return
-    }
-    const updated = cards.map((item) => item.position === selected ? { ...item, name: name.trim(), set: printing.trim(), confirmed: true } : item)
-    setCards(updated)
-    const next = updated.find((item) => !item.confirmed)
-    setNotice(`${card.id} confirmed for this simulation. Condition review is not connected yet.`)
-    if (next) {
-      setSelected(next.position)
-      setName(next.name)
-      setPrinting(next.set)
-    }
-  }
-
-  function toggleOccupied(position: number) {
-    if (cards.length) return
-    setOccupied((previous) => previous.includes(position) ? previous.filter((value) => value !== position) : [...previous, position].sort((a, b) => a - b))
-  }
-
+  const bulkCount = items.filter(item => item.status === 'bulk').length
+  const reviewCount = items.filter(item => item.status === 'review').length
   return (
     <main className="scan-shell">
       <div className="scan-container">
         <header className="scan-header">
-          <div><p className="eyebrow">Workflow step 1 · Card intake</p><h1>Scan cards</h1><p className="scan-muted">Batch capture, individual identification, and a clear review queue.</p></div>
+          <div>
+            <p className="eyebrow">Workflow step 1 · Bulk intake</p>
+            <h1>Single-card bulk scanner</h1>
+            <p className="scan-muted">Confident low-value cards queue automatically. Exceptions go to review.</p>
+          </div>
           <Link className="scan-home" to="/">← Foundation</Link>
         </header>
-        <div className="scan-banner" role="status"><strong>Prototype mode</strong> — camera preview and local photo capture are available; card recognition and intake assignment remain simulated. No photographs are uploaded.</div>
+        <div className="scan-banner" role="status">
+          <strong>Prototype simulation</strong> — recognition scores and prices are entered manually for testing.
+          Camera capture remains a separate experiment; no automatic recognition or inventory upload yet.
+        </div>
         <div className="scan-layout">
-          <section className="scan-panel" aria-label="Capture station">
-            <h2>Capture station</h2>
-            <p className="scan-muted">Select occupied grid positions, then simulate a capture. Cards must not overlap.</p>
-            <div className="scan-source" aria-label="Capture method">
-              <button type="button" className={source === 'overhead' ? 'active' : ''} onClick={() => setSource('overhead')}>Overhead camera</button>
-              <button type="button" className={source === 'phone' ? 'active' : ''} onClick={() => setSource('phone')}>Use phone instead</button>
-              <button type="button" className={source === 'manual' ? 'active' : ''} onClick={() => setSource('manual')}>Manual entry</button>
-            </div>
-            <p className="scan-mode">{source === 'overhead' ? 'Overhead camera: local capture test; automatic card detection not connected' : source === 'phone' ? 'Phone backup: simulated; secure upload link not implemented' : 'Manual fallback: enter a card identity after simulating capture'}</p>
-            {source === 'overhead' && <CameraPreview />}
-            <div className="scan-grid" aria-label="Six-position scanning grid">
-              {positions.map((position) => {
-                const entry = cards.find((item) => item.position === position)
-                const on = cards.length ? Boolean(entry) : occupied.includes(position)
-                return <button key={position} type="button" className={`scan-slot ${on ? 'occupied' : ''} ${cards.length && selected === position ? 'selected' : ''}`} aria-pressed={cards.length ? selected === position : on} onClick={() => cards.length ? entry && selectPosition(position) : toggleOccupied(position)}>
-                  <span className="scan-slot-number">Position {String(position).padStart(2, '0')}</span>
-                  <span className="scan-slot-symbol">{entry?.confirmed ? '✓' : on ? '▣' : '+'}</span>
-                  <span>{entry ? entry.confirmed ? 'Confirmed' : 'Needs ID' : on ? 'Occupied' : 'Empty'}</span>
-                </button>
-              })}
-            </div>
-            <div className="scan-actions">
-              <button type="button" className="scan-primary" onClick={simulateCapture}>Simulate capture</button>
-              <button type="button" className="scan-secondary" onClick={() => {setCards([]);setSelected(1);setName('');setPrinting('');setNotice('Grid reset. Choose occupied positions for your next simulated capture.')}}>Reset grid</button>
-            </div>
-          </section>
-          <section className="scan-panel" aria-label="Identification queue">
-            <h2>Identification queue</h2>
-            <p className="scan-muted">{cards.length ? `${confirmed} of ${cards.length} confirmed · ${pending.length} pending` : 'Capture a simulated batch to create intake records.'}</p>
-            {cards.length ? <div className="scan-queue">{cards.map((item) => <button type="button" key={item.id} onClick={() => selectPosition(item.position)} className={`scan-queue-item ${selected === item.position ? 'selected' : ''}`}>
-              <span><strong>Position {String(item.position).padStart(2, '0')}</strong><small>{item.id}</small>{item.confirmed && <small className="scan-card-identity">{item.name} · {item.set}</small>}</span><span>{item.confirmed ? '✓ Confirmed' : 'Needs ID'}</span>
-            </button>)}</div> : <p className="scan-empty">No cards captured yet.</p>}
+          <section className="scan-panel" aria-label="Bulk scanner simulator">
+            <h2>Bulk scanning rules</h2>
+            <p className="scan-muted">Auto-queue only if the exact card and printing are known, confidence is at least 95%, estimated value is under $5, finish is known, and the card passes a quick playability check. These are provisional settings.</p>
             <div className="scan-identify">
-              <h3>Individual identification</h3>
-              <p className="scan-muted">{card ? `Position ${String(card.position).padStart(2,'0')} · ${card.id}` : 'Select a captured card to begin.'}</p>
-              <label htmlFor="card-name">Card name</label>
-              <input id="card-name" value={name} onChange={(event) => setName(event.target.value)} disabled={!card} placeholder="Enter card name" />
-              <label htmlFor="card-set">Set / printing</label>
-              <input id="card-set" value={printing} onChange={(event) => setPrinting(event.target.value)} disabled={!card} placeholder="Enter set and printing" />
-              <button type="button" className="scan-primary" disabled={!card} onClick={confirmCard}>{card?.confirmed ? 'Update confirmed identity' : 'Confirm identity'}</button>
-              <p className="scan-footnote">Names are entered manually in this prototype; they are not verified against a card database.</p>
+              <h3>Simulate one identified card</h3>
+              <label htmlFor="bulk-name">Card name</label>
+              <input id="bulk-name" value={name} onChange={event => setName(event.target.value)} disabled={cardPresent} placeholder="Example: Llanowar Elves" />
+              <label htmlFor="bulk-printing">Exact set / printing</label>
+              <input id="bulk-printing" value={printing} onChange={event => setPrinting(event.target.value)} disabled={cardPresent} placeholder="Set and collector number" />
+              <label htmlFor="bulk-value">Estimated resale value in USD</label>
+              <input id="bulk-value" type="number" min="0" step="0.01" value={value} onChange={event => setValue(event.target.value)} disabled={cardPresent} placeholder="Leave blank to test unknown value" />
+              <label htmlFor="bulk-confidence">Simulated recognition confidence (%)</label>
+              <input id="bulk-confidence" type="number" min="0" max="100" value={confidence} onChange={event => setConfidence(event.target.value)} disabled={cardPresent} />
+              <label><input type="checkbox" checked={finishKnown} onChange={event => setFinishKnown(event.target.checked)} disabled={cardPresent} /> Finish / foil status verified</label>
+              <label><input type="checkbox" checked={playable} onChange={event => setPlayable(event.target.checked)} disabled={cardPresent} /> Quick playability check passed</label>
+              <div className="scan-actions">
+                <button type="button" className="scan-primary" disabled={cardPresent} onClick={submitSimulatedScan}>Simulate stable card capture</button>
+                <button type="button" className="scan-secondary" disabled={!cardPresent} onClick={removeCard}>Card removed — reset scanner</button>
+              </div>
+              <p className="scan-mode" role="status">{notice}</p>
             </div>
+            <details>
+              <summary>Existing camera and crop experiment (manual)</summary>
+              <CameraPreview />
+            </details>
+          </section>
+          <section className="scan-panel" aria-label="Intake queue">
+            <h2>Intake queue</h2>
+            <p className="scan-muted">{bulkCount} automatically queued · {reviewCount} need review</p>
+            {items.length === 0 ? <p className="scan-empty">No cards scanned yet.</p> :
+              <div className="scan-queue">
+                {items.map(item => <div key={item.id} className="scan-queue-item">
+                  <span>
+                    <strong>{item.name}</strong>
+                    <small>{item.id} · {item.printing}</small>
+                    <small>{item.value === null ? 'Price unknown' : `$${item.value.toFixed(2)}`} · {item.reason}</small>
+                  </span>
+                  <span>{item.status === 'bulk' ? 'Bulk queued' : 'Review'}</span>
+                </div>)}
+              </div>}
+            <div className="scan-actions">
+              <button type="button" className="scan-secondary" onClick={() => {
+                setItems([]); setCounter(0); setCardPresent(false); setNotice('Simulation cleared.')
+              }}>Clear simulated queue</button>
+            </div>
+            <p className="scan-footnote">A card with unknown identity, value, or finish never automatically enters bulk. This screen does not estimate real prices or identify cards yet.</p>
           </section>
         </div>
-        <p className="scan-notice" role="status">{notice}</p>
-        <div className="scan-next"><span>Next: condition review — not yet connected.</span><Link to="/review">Preview review screen →</Link></div>
+        <div className="scan-next"><span>Next: connect real single-card capture and a card-identification service.</span><Link to="/review">Preview review screen →</Link></div>
       </div>
     </main>
   )
