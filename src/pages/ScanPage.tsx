@@ -16,6 +16,7 @@ export function ScanPage() {
   const [confidence, setConfidence] = useState('98')
   const [finishKnown, setFinishKnown] = useState(true)
   const [playable, setPlayable] = useState(true)
+  const [scanState, setScanState] = useState<'ready' | 'accepted' | 'review'>('ready')
   const [notice, setNotice] = useState('Prototype: simulated identification only. Live card recognition, pricing, and automatic capture are not connected.')
 
   function submitSimulatedScan() {
@@ -36,6 +37,7 @@ export function ScanPage() {
     setItems(previous => [{ id: `INT-${String(next).padStart(4, '0')}`, name: name.trim() || 'Unknown card',
       printing: printing.trim() || 'Unknown printing', value: validValue ? estimated : null,
       status: automatic ? 'bulk' : 'review', reason }, ...previous])
+    setScanState(automatic ? 'accepted' : 'review')
     setNotice(automatic ? 'Automatically added to bulk intake. Ready for the next arriving card.' :
       `Sent to review: ${reason}. Ready for the next arriving card.`)
     resetEntry()
@@ -67,9 +69,22 @@ export function ScanPage() {
           <strong>Prototype simulation</strong> — recognition scores and prices are entered manually for testing.
           The simulation treats each button press as a new card arrival. In live capture, an arrival transition and stable image must be detected before each scan; no automatic recognition or inventory upload yet.
         </div>
+        <div className={`scan-live-status scan-live-status--${scanState}`} role="status" aria-live="polite">
+          <span className="scan-status-icon" aria-hidden="true">{scanState === 'ready' ? '◎' : scanState === 'accepted' ? '✓' : '!'}</span>
+          <div className="scan-status-message"><strong>{scanState === 'ready' ? 'Ready — waiting for next card' : scanState === 'accepted' ? 'Added to bulk queue' : 'Set aside for review'}</strong>
+            <span>{scanState === 'ready' ? 'Camera capture will start when the next card arrives (not yet connected).' : notice}</span>
+          </div>
+          <div className="scan-status-counts"><span><strong>{bulkCount}</strong> bulk accepted</span><span><strong>{reviewCount}</strong> needs review</span></div>
+        </div>
         <div className="scan-layout">
           <section className="scan-panel" aria-label="Bulk scanner simulator">
-            <h2>Bulk scanning rules</h2>
+            <h2>Camera station</h2>
+            <p className="scan-muted">One card at a time. The collection tray can hold previously scanned cards.</p>
+            <details className="scan-camera-experiment" open>
+              <summary>Camera preview and existing crop experiment</summary>
+              <CameraPreview />
+            </details>
+            <h3>Bulk scanning rules</h3>
             <p className="scan-muted">Auto-queue only if the exact card and printing are known, confidence is at least 95%, estimated value is under $5, finish is known, and the card passes a quick playability check. These are provisional settings.</p>
             <div className="scan-identify">
               <h3>Simulate one identified card</h3>
@@ -84,15 +99,11 @@ export function ScanPage() {
               <label><input type="checkbox" checked={finishKnown} onChange={event => setFinishKnown(event.target.checked)} /> Finish / foil status verified</label>
               <label><input type="checkbox" checked={playable} onChange={event => setPlayable(event.target.checked)} /> Quick playability check passed</label>
               <div className="scan-actions">
-                <button type="button" className="scan-primary" onClick={submitSimulatedScan}>Simulate stable card capture</button>
-                <button type="button" className="scan-secondary" disabled={!cardPresent} onClick={removeCard}>Card removed — reset scanner</button>
+                <button type="button" className="scan-primary" onClick={submitSimulatedScan}>Simulate next card arriving</button>
+                <button type="button" className="scan-secondary" onClick={() => {resetEntry();setScanState("ready");setNotice("Ready to simulate the next arrival.")}}>Reset form</button>
               </div>
               <p className="scan-mode" role="status">{notice}</p>
             </div>
-            <details>
-              <summary>Existing camera and crop experiment (manual)</summary>
-              <CameraPreview />
-            </details>
           </section>
           <section className="scan-panel" aria-label="Intake queue">
             <h2>Intake queue</h2>
@@ -110,7 +121,7 @@ export function ScanPage() {
               </div>}
             <div className="scan-actions">
               <button type="button" className="scan-secondary" onClick={() => {
-                setItems([]); setCounter(0); resetEntry(); setNotice('Simulation cleared.')
+                setItems([]); setCounter(0); resetEntry(); setScanState('ready'); setNotice('Simulation cleared.')
               }}>Clear simulated queue</button>
             </div>
             <p className="scan-footnote">A card with unknown identity, value, or finish never automatically enters bulk. This screen does not estimate real prices or identify cards yet.</p>
