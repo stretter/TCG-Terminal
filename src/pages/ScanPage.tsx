@@ -16,11 +16,9 @@ export function ScanPage() {
   const [confidence, setConfidence] = useState('98')
   const [finishKnown, setFinishKnown] = useState(true)
   const [playable, setPlayable] = useState(true)
-  const [cardPresent, setCardPresent] = useState(false)
   const [notice, setNotice] = useState('Prototype: simulated identification only. Live card recognition, pricing, and automatic capture are not connected.')
 
   function submitSimulatedScan() {
-    if (cardPresent) { setNotice('Remove the previous card before scanning another.'); return }
     const estimated = value.trim() === '' ? null : Number(value)
     const confidenceNumber = Number(confidence) / 100
     const identified = Boolean(name.trim() && printing.trim())
@@ -38,20 +36,18 @@ export function ScanPage() {
     setItems(previous => [{ id: `INT-${String(next).padStart(4, '0')}`, name: name.trim() || 'Unknown card',
       printing: printing.trim() || 'Unknown printing', value: validValue ? estimated : null,
       status: automatic ? 'bulk' : 'review', reason }, ...previous])
-    setCardPresent(true)
-    setNotice(automatic ? 'Automatically added to bulk intake. Remove this card to enable the next scan.' :
-      `Sent to review: ${reason}. Remove this card before scanning again.`)
+    setNotice(automatic ? 'Automatically added to bulk intake. Ready for the next arriving card.' :
+      `Sent to review: ${reason}. Ready for the next arriving card.`)
+    resetEntry()
   }
 
-  function removeCard() {
-    setCardPresent(false)
+  function resetEntry() {
     setName('')
     setPrinting('')
     setValue('')
     setConfidence('98')
     setFinishKnown(true)
     setPlayable(true)
-    setNotice('Card removed. Ready for the next scan.')
   }
 
   const bulkCount = items.filter(item => item.status === 'bulk').length
@@ -63,13 +59,13 @@ export function ScanPage() {
           <div>
             <p className="eyebrow">Workflow step 1 · Bulk intake</p>
             <h1>Single-card bulk scanner</h1>
-            <p className="scan-muted">Confident low-value cards queue automatically. Exceptions go to review.</p>
+            <p className="scan-muted">Each new card arrival triggers an independent scan. Previously scanned cards can accumulate in the output tray.</p>
           </div>
           <Link className="scan-home" to="/">← Foundation</Link>
         </header>
         <div className="scan-banner" role="status">
           <strong>Prototype simulation</strong> — recognition scores and prices are entered manually for testing.
-          Camera capture remains a separate experiment; no automatic recognition or inventory upload yet.
+          The simulation treats each button press as a new card arrival. In live capture, an arrival transition and stable image must be detected before each scan; no automatic recognition or inventory upload yet.
         </div>
         <div className="scan-layout">
           <section className="scan-panel" aria-label="Bulk scanner simulator">
@@ -78,17 +74,17 @@ export function ScanPage() {
             <div className="scan-identify">
               <h3>Simulate one identified card</h3>
               <label htmlFor="bulk-name">Card name</label>
-              <input id="bulk-name" value={name} onChange={event => setName(event.target.value)} disabled={cardPresent} placeholder="Example: Llanowar Elves" />
+              <input id="bulk-name" value={name} onChange={event => setName(event.target.value)} placeholder="Example: Llanowar Elves" />
               <label htmlFor="bulk-printing">Exact set / printing</label>
-              <input id="bulk-printing" value={printing} onChange={event => setPrinting(event.target.value)} disabled={cardPresent} placeholder="Set and collector number" />
+              <input id="bulk-printing" value={printing} onChange={event => setPrinting(event.target.value)} placeholder="Set and collector number" />
               <label htmlFor="bulk-value">Estimated resale value in USD</label>
-              <input id="bulk-value" type="number" min="0" step="0.01" value={value} onChange={event => setValue(event.target.value)} disabled={cardPresent} placeholder="Leave blank to test unknown value" />
+              <input id="bulk-value" type="number" min="0" step="0.01" value={value} onChange={event => setValue(event.target.value)} placeholder="Leave blank to test unknown value" />
               <label htmlFor="bulk-confidence">Simulated recognition confidence (%)</label>
-              <input id="bulk-confidence" type="number" min="0" max="100" value={confidence} onChange={event => setConfidence(event.target.value)} disabled={cardPresent} />
-              <label><input type="checkbox" checked={finishKnown} onChange={event => setFinishKnown(event.target.checked)} disabled={cardPresent} /> Finish / foil status verified</label>
-              <label><input type="checkbox" checked={playable} onChange={event => setPlayable(event.target.checked)} disabled={cardPresent} /> Quick playability check passed</label>
+              <input id="bulk-confidence" type="number" min="0" max="100" value={confidence} onChange={event => setConfidence(event.target.value)} />
+              <label><input type="checkbox" checked={finishKnown} onChange={event => setFinishKnown(event.target.checked)} /> Finish / foil status verified</label>
+              <label><input type="checkbox" checked={playable} onChange={event => setPlayable(event.target.checked)} /> Quick playability check passed</label>
               <div className="scan-actions">
-                <button type="button" className="scan-primary" disabled={cardPresent} onClick={submitSimulatedScan}>Simulate stable card capture</button>
+                <button type="button" className="scan-primary" onClick={submitSimulatedScan}>Simulate stable card capture</button>
                 <button type="button" className="scan-secondary" disabled={!cardPresent} onClick={removeCard}>Card removed — reset scanner</button>
               </div>
               <p className="scan-mode" role="status">{notice}</p>
@@ -114,7 +110,7 @@ export function ScanPage() {
               </div>}
             <div className="scan-actions">
               <button type="button" className="scan-secondary" onClick={() => {
-                setItems([]); setCounter(0); setCardPresent(false); setNotice('Simulation cleared.')
+                setItems([]); setCounter(0); resetEntry(); setNotice('Simulation cleared.')
               }}>Clear simulated queue</button>
             </div>
             <p className="scan-footnote">A card with unknown identity, value, or finish never automatically enters bulk. This screen does not estimate real prices or identify cards yet.</p>
