@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { CameraPreview } from '../components/CameraPreview'
+import { AutoCaptureTrial } from '../components/AutoCaptureTrial'
 
 type Status = 'bulk' | 'review'
 type Intake = { id: string; name: string; printing: string; value: number | null; status: Status; reason: string }
@@ -83,6 +84,10 @@ export function ScanPage() {
             <details className="scan-camera-experiment" open>
               <summary>Camera preview and existing crop experiment</summary>
               <CameraPreview />
+            </details>
+            <details className="scan-camera-experiment">
+              <summary>Experimental hands-free capture (no inventory updates)</summary>
+              <AutoCaptureTrial />
             </details>
             <h3>Bulk scanning rules</h3>
             <p className="scan-muted">Auto-queue only if the exact card and printing are known, confidence is at least 95%, estimated value is under $5, finish is known, and the card passes a quick playability check. These are provisional settings.</p>
