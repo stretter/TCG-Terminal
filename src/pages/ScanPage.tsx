@@ -109,15 +109,21 @@ export function ScanPage() {
             <h2>Intake queue</h2>
             <p className="scan-muted">{bulkCount} automatically queued · {reviewCount} need review</p>
             {items.length === 0 ? <p className="scan-empty">No cards scanned yet.</p> :
-              <div className="scan-queue">
-                {items.map(item => <div key={item.id} className="scan-queue-item">
-                  <span>
-                    <strong>{item.name}</strong>
-                    <small>{item.id} · {item.printing}</small>
-                    <small>{item.value === null ? 'Price unknown' : `$${item.value.toFixed(2)}`} · {item.reason}</small>
-                  </span>
-                  <span>{item.status === 'bulk' ? 'Bulk queued' : 'Review'}</span>
-                </div>)}
+              <div className="scan-queue-columns">
+                {(['bulk', 'review'] as const).map(status => {
+                  const entries = items.filter(item => item.status === status)
+                  return <div key={status} className="scan-queue-group">
+                    <h3>{status === 'bulk' ? 'Bulk accepted' : 'Needs review'} ({entries.length})</h3>
+                    {entries.length === 0 ? <p className="scan-empty">No cards in this queue.</p> :
+                      <div className="scan-queue">{entries.map(item => <div key={item.id} className="scan-queue-item">
+                        <span>
+                          <strong>{item.name}</strong>
+                          <small>{item.id} · {item.printing}</small>
+                          <small>{item.value === null ? 'Price unknown' : `$${item.value.toFixed(2)}`} · {item.reason}</small>
+                        </span>
+                      </div>)}</div>}
+                  </div>
+                })}
               </div>}
             <div className="scan-actions">
               <button type="button" className="scan-secondary" onClick={() => {
